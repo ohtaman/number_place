@@ -1,0 +1,2 @@
+# sudoku
+Streamlit sudoku apps

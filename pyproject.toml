@@ -6,12 +6,19 @@ authors = ["ohtaman <ohtamans@gmail.com>"]
 license = "Apache License (2.0)"
 readme = "README.md"
 
+packages = [
+    { include = "app" }
+]
+
 [tool.poetry.dependencies]
 python = "^3.10"
 streamlit = "^1.40.2"
 pulp = "^2.9.0"
 pandas = "^2.2.3"
 
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.13.0"
 
 [build-system]
 requires = ["poetry-core"]

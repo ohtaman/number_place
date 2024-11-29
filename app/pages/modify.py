@@ -1,92 +1,128 @@
 import streamlit as st
-from pulp import LpProblem, LpVariable, LpMinimize, LpStatus, lpSum, LpInteger
-import pandas as pd
+from pulp import LpProblem, LpVariable, LpMinimize, LpStatus, LpBinary, lpSum
 import numpy as np
 
-# 数独を解き、誤りを修正する関数
-def solve_and_correct_sudoku_with_penalty(grid):
-    # 問題の定義
-    prob = LpProblem("SudokuSolver", LpMinimize)
 
-    # 変数の定義
-    cells = LpVariable.dicts("Cell", (range(9), range(9), range(1, 10)), cat=LpInteger, lowBound=0, upBound=1)
+def modify(hints):
+    """
+    ナンプレの初期状態を修正し、解を得る
 
-    # Penalty変数の定義（修正が必要なセルを表す）
-    penalty = LpVariable.dicts("Penalty", (range(9), range(9)), cat=LpInteger, lowBound=0, upBound=1)
+    ユーザーが入力したナンプレの問題に対し、数理最適化を用いて解を導き出します。
+    初期状態が矛盾している場合には、最小限の修正を加えた問題を生成します。
 
-    # 制約条件
+    Args:
+        hints (np.ndarray): 9x9のナンプレの初期状態。NaNは空白を表す。
+
+    Returns:
+        tuple: (modified_hints, corrections, solution)
+            - modified_hints (np.ndarray): 修正後の9x9ナンプレ問題。
+            - corrections (list of tuple): 修正が加えられたセルの座標 [(i, j), ...]。
+            - solution (np.ndarray): 修正後のナンプレ問題の解。
+    """
+    # 数理最適化問題の定義
+    prob = LpProblem("ModifyNumberPlace", LpMinimize)
+
+    # 各セルを表す変数を定義
+    # cells[i][j][k] == 1 のとき、セル [i, j] の値が k であることを表す
+    cells = LpVariable.dicts("Cell", (range(9), range(9), range(1, 10)), cat=LpBinary)
+    # ペナルティ変数の定義
+    # penalty[i][j] == 1 のとき、セル [i, j] の値（ヒント）を修正することを表す
+    penalty = LpVariable.dicts("Penalty", (range(9), range(9)), cat=LpBinary)
+
+    # 各セルに1つの値が入る制約
     for i in range(9):
         for j in range(9):
-            prob += lpSum(cells[i][j][k] for k in range(1, 10)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for k in range(1, 10)) == 1,
+                f"CellValue_{i}_{j}"
+            )
 
+    # 各行に1〜9が1回ずつ入る制約
     for i in range(9):
         for k in range(1, 10):
-            prob += lpSum(cells[i][j][k] for j in range(9)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for j in range(9)) == 1,
+                f"RowValue_{i}_{k}"
+            )
 
+    # 各列に1〜9が1回ずつ入る制約
     for j in range(9):
         for k in range(1, 10):
-            prob += lpSum(cells[i][j][k] for i in range(9)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for i in range(9)) == 1,
+                f"ColumnValue_{j}_{k}"
+            )
 
+    # 各3x3ブロックに1〜9が1回ずつ入る制約
     for block_i in range(3):
         for block_j in range(3):
             for k in range(1, 10):
-                prob += lpSum(
-                    cells[block_i * 3 + di][block_j * 3 + dj][k] for di in range(3) for dj in range(3)
-                ) == 1
+                prob.addConstraint(
+                    lpSum(cells[block_i * 3 + di][block_j * 3 + dj][k] for di in range(3) for dj in range(3)) == 1,
+                    f"BlockValue_{block_i}_{block_j}_{k}",
+                )
 
-    # 初期値の設定とPenalty変数の導入
+    # 初期値（ヒント）を設定
     for i in range(9):
         for j in range(9):
-            if grid[i][j] != 0:
-                k = grid[i][j]
-                # 入力値を尊重しつつ、修正を許容（Penaltyで修正数を最小化）
-                prob += cells[i][j][k] + penalty[i][j] == 1
+            if not np.isnan(hints[i][j]):  # NaNは空白を表す
+                prob.addConstraint(
+                    cells[i][j][int(hints[i][j])] + penalty[i][j] == 1,
+                    f"HintValue_{i}_{j}"
+                )
 
-    # 目的関数: Penaltyの合計を最小化
+    # 目的関数: ペナルティの合計を最小化
     prob += lpSum(penalty[i][j] for i in range(9) for j in range(9))
 
-    # 問題を解く
+    # 解を見つける
     prob.solve()
 
-    # 解の取得
+    # 最適解が得られた場合、解を9x9グリッドで返す
     if LpStatus[prob.status] == "Optimal":
-        solved_grid = [[0 for _ in range(9)] for _ in range(9)]
-        corrections = []
+        # 解
+        solution = np.zeros((9, 9))
         for i in range(9):
             for j in range(9):
                 for k in range(1, 10):
-                    if cells[i][j][k].value() > 0.5:
-                        solved_grid[i][j] = k
-                if penalty[i][j].value() > 0.5:
-                    corrections.append((i + 1, j + 1))  # 1-indexedで返す
-        return solved_grid, corrections
-    else:
-        return None, None
+                    if cells[i][j][k].value() == 1:
+                        solution[i, j] = k
+        # 修正箇所
+        corrections = []
+        for i in range(9):
+            for j in range(9):
+                if penalty[i][j].value() == 1:
+                    corrections.append((i, j))
 
-
-# Streamlit アプリ
-st.title("数独ソルバー (修正提案付き)")
-st.write("混合整数計画法を使用して数独を解き、誤りを修正します。")
-
-# 数独の入力
-st.write("問題を入力してください（0は空白を意味します）。")
-hints = st.data_editor(np.zeros((9, 9), dtype=int), hide_index=False)
-
-if st.button("解く"):
-    st.write("解を計算中...")
-    solution, corrections = solve_and_correct_sudoku_with_penalty(hints)
-    if solution:
-        st.write("解けました！")
-        st.subheader("修正された問題:")
-        corrected_grid = hints.copy()
+        # 修正後のヒント
+        modified_hints = hints.copy()
         for i, j in corrections:
-            corrected_grid[i - 1][j - 1] = 0  # 修正箇所を空白に
-        st.table(pd.DataFrame(corrected_grid, index=range(1, 10), columns=range(1, 10)))
+            modified_hints[i, j] = solution[i, j]
 
-        st.subheader("修正箇所:")
-        st.write(f"{len(corrections)} 箇所の修正が必要です: {corrections}")
-
-        st.subheader("解:")
-        st.table(pd.DataFrame(solution, index=range(1, 10), columns=range(1, 10)))
+        return modified_hints, corrections, solution
     else:
-        st.write("解けませんでした。問題を確認してください。")
+        return None, None, None # 何らかの原因で解を得られなかった場合
+
+
+# Streamlitアプリ
+st.markdown("### 数理最適化で問題を修正する")
+
+st.write("問題を入力してください。")
+hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)
+
+if st.button("修正する"):
+    with st.spinner("解を計算中..."):
+        modified_hints, corrections, solution = modify(hints)
+
+    # 修正が必要な場合
+    if corrections:
+        st.subheader("修正後のヒント:")
+        st.dataframe(modified_hints, hide_index=False)
+        st.text(f"修正箇所: {corrections}")
+    else:
+        st.text(f"修正は必要ありません")
+
+    if solution is not None:
+        st.subheader("解:")
+        st.dataframe(solution, hide_index=False)
+    else:
+        st.error("解がありません。問題を確認してください。")

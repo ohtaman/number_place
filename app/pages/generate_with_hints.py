@@ -1,145 +1,232 @@
-import streamlit as st
-from pulp import LpProblem, LpVariable, LpMinimize, lpSum, LpInteger, LpStatus
-import numpy as np
-import pandas as pd
 import random
 
-# 数独の解を生成する関数（重み付き、固定値対応）
-def generate_full_sudoku_solution_with_weights_and_fixed_values(fixed_values):
-    # 問題の定義
-    prob = LpProblem("SudokuGeneratorWithWeights", LpMinimize)
+import streamlit as st
+from pulp import LpProblem, LpVariable, LpMinimize, LpStatus, LpBinary, lpSum
+import numpy as np
+import pandas as pd
 
-    # ランダムな重みを生成
-    weights = np.random.randint(1, 10, size=(9, 9))
 
-    # 変数の定義
-    cells = LpVariable.dicts("Cell", (range(9), range(9), range(1, 10)), cat=LpInteger, lowBound=0, upBound=1)
+# ナンプレを解く関数
+def solve(hints):
+    """
+    ナンプレを混合整数計画法で解く
 
-    # 制約条件
-    # 各セルには1つの値
+    Args:
+        hints (np.ndarray): 9x9のナンプレの初期状態。NaNは空白を表す。
+
+    Returns:
+        list: 解の9x9グリッド（解がない場合はNone）。
+    """
+    # 数理最適化問題の定義
+    prob = LpProblem("SolveNumberPlace", LpMinimize)
+
+    # 各セルを表す変数を定義
+    # cells[i][j][k] == 1 のとき、セル [i, j] の値が k であることを表す
+    cells = LpVariable.dicts("Cell", (range(9), range(9), range(1, 10)), cat=LpBinary)
+
+    # 各セルに1つの値が入る制約
     for i in range(9):
         for j in range(9):
-            prob += lpSum(cells[i][j][k] for k in range(1, 10)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for k in range(1, 10)) == 1,
+                f"CellValue_{i}_{j}"
+            )
 
-    # 各行には1〜9が1回ずつ
+    # 各行に1〜9が1回ずつ入る制約
     for i in range(9):
         for k in range(1, 10):
-            prob += lpSum(cells[i][j][k] for j in range(9)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for j in range(9)) == 1,
+                f"RowValue_{i}_{k}"
+            )
 
-    # 各列には1〜9が1回ずつ
+    # 各列に1〜9が1回ずつ入る制約
     for j in range(9):
         for k in range(1, 10):
-            prob += lpSum(cells[i][j][k] for i in range(9)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for i in range(9)) == 1,
+                f"ColumnValue_{j}_{k}"
+            )
 
-    # 各3x3ブロックには1〜9が1回ずつ
+    # 各3x3ブロックに1〜9が1回ずつ入る制約
     for block_i in range(3):
         for block_j in range(3):
             for k in range(1, 10):
-                prob += lpSum(
-                    cells[block_i * 3 + di][block_j * 3 + dj][k]
-                    for di in range(3) for dj in range(3)
-                ) == 1
+                prob.addConstraint(
+                    lpSum(cells[block_i * 3 + di][block_j * 3 + dj][k] for di in range(3) for dj in range(3)) == 1,
+                    f"BlockValue_{block_i}_{block_j}_{k}",
+                )
 
-    # 固定値を設定
-    for i, j, value in fixed_values:
-        prob += cells[i][j][value] == 1
+    # 初期値（ヒント）を設定
+    for i in range(9):
+        for j in range(9):
+            if not np.isnan(hints[i][j]):  # NaNは空白を表す
+                prob.addConstraint(
+                    cells[i][j][int(hints[i][j])] == 1,
+                    f"HintValue_{i}_{j}"
+                )
 
-    # 目的関数: ランダムな重みを最小化
-    prob += lpSum(weights[i][j] * lpSum(cells[i][j][k] for k in range(1, 10)) for i in range(9) for j in range(9))
+    # ランダムな目的関数を設定
+    prob.setObjective(lpSum([
+        cells[i][j][k]*random.random()
+        for i in range(9)
+        for j in range(9)
+        for k in range(1, 10)
+    ]))
 
-    # 問題を解く
+    # 解を見つける
     prob.solve()
 
-    # 解を取得
+    # 最適解が得られた場合、解を9x9グリッドで返す
     if LpStatus[prob.status] == "Optimal":
-        solution = [[0 for _ in range(9)] for _ in range(9)]
+        solution = np.zeros((9, 9))
         for i in range(9):
             for j in range(9):
                 for k in range(1, 10):
-                    if cells[i][j][k].value() > 0.5:
-                        solution[i][j] = k
-        return solution, weights
+                    if cells[i][j][k].value() == 1:
+                        solution[i, j] = k
+        return solution
     else:
-        return None, None
+        return None  # 解がない場合
 
-# 数独が一意解を持つか確認する関数（変更なし）
-def is_unique_solution(grid):
-    prob = LpProblem("SudokuUniquenessChecker", LpMinimize)
-    cells = LpVariable.dicts("Cell", (range(9), range(9), range(1, 10)), cat=LpInteger, lowBound=0, upBound=1)
+
+def has_unique_solution(hints):
+    """
+    ナンプレに一意解が存在するか確認する関数。
+
+    Args:
+        hints (np.ndarray): 9x9のナンプレの初期状態。NaNは空白を表す。
+
+    Returns:
+        bool: 一意解が存在すればTrue、そうでなければFalse。
+    """
+    # 数理最適化問題の定義
+    prob = LpProblem("SolveNumberPlace", LpMinimize)
+
+    # 各セルを表す変数を定義
+    # cells[i][j][k] == 1 のとき、セル [i, j] の値が k であることを表す
+    cells = LpVariable.dicts("Cell", (range(9), range(9), range(1, 10)), cat=LpBinary)
+
+    # 各セルに1つの値が入る制約
     for i in range(9):
         for j in range(9):
-            if grid[i][j] != 0:
-                prob += cells[i][j][grid[i][j]] == 1
-            else:
-                prob += lpSum(cells[i][j][k] for k in range(1, 10)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for k in range(1, 10)) == 1,
+                f"CellValue_{i}_{j}"
+            )
+
+    # 各行に1〜9が1回ずつ入る制約
     for i in range(9):
         for k in range(1, 10):
-            prob += lpSum(cells[i][j][k] for j in range(9)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for j in range(9)) == 1,
+                f"RowValue_{i}_{k}"
+            )
+
+    # 各列に1〜9が1回ずつ入る制約
     for j in range(9):
         for k in range(1, 10):
-            prob += lpSum(cells[i][j][k] for i in range(9)) == 1
+            prob.addConstraint(
+                lpSum(cells[i][j][k] for i in range(9)) == 1,
+                f"ColumnValue_{j}_{k}"
+            )
+
+    # 各3x3ブロックに1〜9が1回ずつ入る制約
     for block_i in range(3):
         for block_j in range(3):
             for k in range(1, 10):
-                prob += lpSum(
-                    cells[block_i * 3 + di][block_j * 3 + dj][k]
-                    for di in range(3) for dj in range(3)
-                ) == 1
-    prob.solve()
-    if LpStatus[prob.status] != "Optimal":
-        return False
-    first_solution = [[0 for _ in range(9)] for _ in range(9)]
+                prob.addConstraint(
+                    lpSum(cells[block_i * 3 + di][block_j * 3 + dj][k] for di in range(3) for dj in range(3)) == 1,
+                    f"BlockValue_{block_i}_{block_j}_{k}",
+                )
+
+    # 初期値（ヒント）を設定
     for i in range(9):
         for j in range(9):
-            for k in range(1, 10):
-                if cells[i][j][k].value() > 0.5:
-                    first_solution[i][j] = k
-    prob += lpSum(
-        cells[i][j][k] * (1 if first_solution[i][j] != k else 0)
-        for i in range(9) for j in range(9) for k in range(1, 10)
-    ) >= 1
+            if not np.isnan(hints[i][j]):  # NaNは空白を表す
+                prob.addConstraint(
+                    cells[i][j][int(hints[i][j])] == 1,
+                    f"HintValue_{i}_{j}"
+                )
+
+    # 目的関数を設定（必要ないため定数（0）を設定）
+    prob.setObjective(lpSum([]))
+
+    # 解を見つける
     prob.solve()
-    return LpStatus[prob.status] != "Optimal"
+    if LpStatus[prob.status] != "Optimal":
+        return False  # 解が存在しない
 
-# 一意解を持つ数独問題を生成する関数（変更なし）
-def generate_sudoku_problem(solution):
-    problem = [row[:] for row in solution]
+
+    # はじめに見つかった解を禁止する
+    # はじめに見つかった解で選択されなかった変数 cells[i][j][k] が少なくとも1つは値 1 を持つ
+    prob.addConstraint(
+        lpSum(
+            cells[i][j][k]
+            for i in range(9)
+            for j in range(9)
+            for k in range(1, 10)
+            if cells[i][j][k].value() != 1
+        ) >= 1
+    )
+
+    prob.solve()
+
+    return LpStatus[prob.status] != "Optimal"  # 別解がなければ一意解
+
+
+def generate_problem(solution, num_hints):
+    """
+    一意解を持つナンプレの問題を生成する
+
+    Args:
+        solution (np.ndarray): 完全なナンプレの解。
+        num_hints (int): 問題として残すセルの数（難易度調整）。
+
+    Returns:
+        np.ndarray: 一意解を持つナンプレの問題。
+    """
+    hints = solution.copy()
     indices = [(i, j) for i in range(9) for j in range(9)]
-    random.shuffle(indices)
+    random.shuffle(indices)  # セルの順序をランダムにする
+
     for i, j in indices:
-        temp = problem[i][j]
-        problem[i][j] = 0
-        if not is_unique_solution(problem):
-            problem[i][j] = temp
-    return problem
+        # 現在のセルを削除（np.nan に設定）
+        temp = hints[i][j]
+        hints[i][j] = np.nan
 
-# Streamlit アプリ
-st.title("数独問題生成アプリ (固定値対応)")
-st.write("固定値を設定して、一意解を持つ数独問題を生成します。")
+        # 一意解でなければ削除を戻す
+        if not has_unique_solution(hints):
+            hints[i][j] = temp
 
-# デフォルトの空白グリッドを作成
-default_grid = pd.DataFrame(0, index=range(1, 10), columns=range(1, 10))
-grid_df = st.data_editor(default_grid, hide_index=False, use_container_width=True, key="fixed_values_grid")
+        # 残っているヒントの数が指定の数に達したら終了
+        if np.sum(~np.isnan(hints)) == num_hints:
+            break
 
-# DataFrame を数値に変換し、固定値リストを作成
-grid = grid_df.astype(int).values
-fixed_values = [(i, j, grid[i, j]) for i in range(9) for j in range(9) if grid[i, j] > 0]
+    return hints
 
-# 問題を生成
-if st.button("数独問題を生成"):
-    st.write("数独の解を生成中...")
-    solution, weights = generate_full_sudoku_solution_with_weights_and_fixed_values(fixed_values)
-    if solution:
-        st.write("数独の解が生成されました。問題を作成中...")
-        problem = generate_sudoku_problem(solution)
+
+# Streamlitアプリ
+st.markdown("### 数理最適化でセルの値を固定して問題を生成する")
+
+st.write("固定したい値を入力してください。")
+hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)
+
+# 難易度の選択（ヒントの数を指定）
+num_hints = st.slider("ヒントの数（目標値）を選択してください", min_value=17, max_value=81, value=30)
+
+
+if st.button("生成する"):
+    with st.spinner("解を生成中..."):
+        solution = solve(hints)
+    if solution is not None:
+        with st.spinner("問題を生成中..."):
+            hints = generate_problem(solution, num_hints)
 
         st.subheader("生成された問題:")
-        st.table(pd.DataFrame(problem))
+        st.dataframe(hints)
 
         st.subheader("解:")
-        st.table(pd.DataFrame(solution))
-
-        st.subheader("ランダムな重み行列:")
-        st.table(pd.DataFrame(weights))
+        st.dataframe(solution)
     else:
-        st.write("数独の解を生成できませんでした。固定値を確認してください。")
+        st.write("解を生成できませんでした。")

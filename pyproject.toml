@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "sudoku"
+name = "number_place"
 version = "0.1.0"
 description = ""
 authors = ["ohtaman <ohtamans@gmail.com>"]

@@ -9,3 +9,5 @@ pages = st.navigation([
 ])
 
 pages.run()
+with st.sidebar:
+    st.markdown("[解説](https://zenn.dev/ohtaman/articles/opt-number-place)")

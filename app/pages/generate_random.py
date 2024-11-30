@@ -207,7 +207,11 @@ def generate_problem(solution, num_hints):
 
 
 # Streamlitアプリ
-st.markdown("### 数理最適化で多様な問題を生成する")
+st.markdown("""
+### 数理最適化で多様な問題を生成する
+
+数理最適化を使ってナンプレの問題を生成します。今回は解が固定されないように、解を得る際にランダムな要素を含めています。そのため、何度も生成を試してみると毎回異なる問題が得られます。
+""")
 
 # 難易度の選択（ヒントの数を指定）
 num_hints = st.slider("ヒントの数（目標値）を選択してください", min_value=17, max_value=81, value=30)

@@ -207,7 +207,11 @@ def generate_problem(solution, num_hints):
 
 
 # Streamlitアプリ
-st.markdown("### 数理最適化でセルの値を固定して問題を生成する")
+st.markdown("""
+### 数理最適化でセルの値を固定して問題を生成する
+
+数理最適化を使ってナンプレの問題を生成します。今回は、解が固定されないようにランダムな要素を加えつつも、特定のセルについては値を固定できるようにしています。
+""")
 
 st.write("固定したい値を入力してください。")
 hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)

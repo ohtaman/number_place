@@ -82,7 +82,11 @@ def solve(hints):
 
 
 # Streamlitアプリ
-st.markdown("### 数理最適化でナンプレ（ナンプレ）を解く")
+st.markdown("""
+### 数理最適化でナンプレ（数独）を解く
+
+数理最適化を用いてナンプレを解きます。与えられたヒントを基に、すべてのセルに1から9の数字を適切に配置していきます。
+""")
 
 st.write("問題を入力してください。")
 hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)

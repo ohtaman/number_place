@@ -104,7 +104,11 @@ def modify(hints):
 
 
 # Streamlitアプリ
-st.markdown("### 数理最適化で問題を修正する")
+st.markdown("""
+### 数理最適化で問題を修正する
+
+与えられたヒントに基づいて、数理最適化を用いてナンプレの問題を修正します。ここでは、既存のヒントが矛盾していて解が存在しない場合、最小限の修正で問題を解けるようにします。
+""")
 
 st.write("問題を入力してください。")
 hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)

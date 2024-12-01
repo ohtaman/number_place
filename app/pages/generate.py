@@ -201,28 +201,29 @@ def generate_problem(solution, num_hints):
     return hints
 
 
-# Streamlitアプリ
-st.markdown("""
-### 数理最適化で問題を生成する
+def run():
+    # Streamlitアプリ
+    st.markdown("""
+    ### 数理最適化で問題を生成する
 
-数理最適化を使ってナンプレの問題を生成します。完全な解をまず求め、その後、ヒントの位置をランダムに削除することで、一意解を持つナンプレの問題を生成します。そのため、同じ設定でも生成される問題はランダムに異なるものになりますが、最終的に得られる解は（たぶん）いつも同じです。
-""")
+    数理最適化を使ってナンプレの問題を生成します。完全な解をまず求め、その後、ヒントの位置をランダムに削除することで、一意解を持つナンプレの問題を生成します。そのため、同じ設定でも生成される問題はランダムに異なるものになりますが、最終的に得られる解は（たぶん）いつも同じです。
+    """)
 
-# 難易度の選択（ヒントの数を指定）
-num_hints = st.slider("ヒントの数（目標値）を選択してください", min_value=17, max_value=81, value=30)
+    # 難易度の選択（ヒントの数を指定）
+    num_hints = st.slider("ヒントの数（目標値）を選択してください", min_value=17, max_value=81, value=30)
 
 
-if st.button("生成する"):
-    with st.spinner("解を生成中..."):
-        solution = solve(np.full((9, 9), np.nan))
-    if solution is not None:
-        with st.spinner("問題を生成中..."):
-            hints = generate_problem(solution, num_hints)
+    if st.button("生成する"):
+        with st.spinner("解を生成中..."):
+            solution = solve(np.full((9, 9), np.nan))
+        if solution is not None:
+            with st.spinner("問題を生成中..."):
+                hints = generate_problem(solution, num_hints)
 
-        st.subheader("生成された問題:")
-        st.dataframe(hints)
+            st.subheader("生成された問題:")
+            st.dataframe(hints)
 
-        st.subheader("解:")
-        st.dataframe(solution)
-    else:
-        st.write("解を生成できませんでした。")
+            st.subheader("解:")
+            st.dataframe(solution)
+        else:
+            st.write("解を生成できませんでした。")

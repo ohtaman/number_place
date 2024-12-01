@@ -81,23 +81,24 @@ def solve(hints):
         return None  # 解がない場合
 
 
-# Streamlitアプリ
-st.markdown("""
-### 数理最適化でナンプレ（数独）を解く
+def run():
+    # Streamlitアプリ
+    st.markdown("""
+    ### 数理最適化でナンプレ（数独）を解く
 
-数理最適化を用いてナンプレを解きます。与えられたヒントを基に、すべてのセルに1から9の数字を適切に配置していきます。
-""")
+    数理最適化を用いてナンプレを解きます。与えられたヒントを基に、すべてのセルに1から9の数字を適切に配置していきます。
+    """)
 
-st.write("問題を入力してください。")
-hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)
+    st.write("問題を入力してください。")
+    hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)
 
-if st.button("解く"):
-    with st.spinner("解を計算中..."):
-        solution = solve(hints)
+    if st.button("解く"):
+        with st.spinner("解を計算中..."):
+            solution = solve(hints)
 
-    # 解が得られた場合、結果を表示
-    if solution is not None:
-        st.subheader("解:")
-        st.dataframe(solution, hide_index=False)
-    else:
-        st.error("解がありません。問題を確認してください。")
+        # 解が得られた場合、結果を表示
+        if solution is not None:
+            st.subheader("解:")
+            st.dataframe(solution, hide_index=False)
+        else:
+            st.error("解がありません。問題を確認してください。")

@@ -103,30 +103,31 @@ def modify(hints):
         return None, None, None # 何らかの原因で解を得られなかった場合
 
 
-# Streamlitアプリ
-st.markdown("""
-### 数理最適化で問題を修正する
+def run():
+    # Streamlitアプリ
+    st.markdown("""
+    ### 数理最適化で問題を修正する
 
-与えられたヒントに基づいて、数理最適化を用いてナンプレの問題を修正します。ここでは、既存のヒントが矛盾していて解が存在しない場合、最小限の修正で問題を解けるようにします。
-""")
+    与えられたヒントに基づいて、数理最適化を用いてナンプレの問題を修正します。ここでは、既存のヒントが矛盾していて解が存在しない場合、最小限の修正で問題を解けるようにします。
+    """)
 
-st.write("問題を入力してください。")
-hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)
+    st.write("問題を入力してください。")
+    hints = st.data_editor(np.full((9, 9), np.nan), hide_index=False, use_container_width=True)
 
-if st.button("修正する"):
-    with st.spinner("解を計算中..."):
-        modified_hints, corrections, solution = modify(hints)
+    if st.button("修正する"):
+        with st.spinner("解を計算中..."):
+            modified_hints, corrections, solution = modify(hints)
 
-    # 修正が必要な場合
-    if corrections:
-        st.subheader("修正後のヒント:")
-        st.dataframe(modified_hints, hide_index=False)
-        st.text(f"修正箇所: {corrections}")
-    else:
-        st.text(f"修正は必要ありません")
+        # 修正が必要な場合
+        if corrections:
+            st.subheader("修正後のヒント:")
+            st.dataframe(modified_hints, hide_index=False)
+            st.text(f"修正箇所: {corrections}")
+        else:
+            st.text(f"修正は必要ありません")
 
-    if solution is not None:
-        st.subheader("解:")
-        st.dataframe(solution, hide_index=False)
-    else:
-        st.error("解がありません。問題を確認してください。")
+        if solution is not None:
+            st.subheader("解:")
+            st.dataframe(solution, hide_index=False)
+        else:
+            st.error("解がありません。問題を確認してください。")
